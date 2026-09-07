@@ -60,3 +60,23 @@ Suggested manual checks:
 - Pin or close the browsing tab, then select another note: a new tab should open.
 
 The plugin has not been tested inside Obsidian; installation and interaction testing are manual.
+
+## Release attestations
+
+GitHub Actions attests `main.js`, `manifest.json`, and `styles.css` when a
+GitHub release is published. Attach all three files before publishing the release.
+The workflow checks them against the tagged source (allowing Windows line endings
+and a UTF-8 BOM), then signs provenance for the exact downloaded bytes. This
+plain-JavaScript plugin has no compilation step. Attestations establish provenance;
+they are not a security audit of the plugin.
+
+For an existing release or a retry, open **Actions → Attest release assets → Run
+workflow**, select `main`, and enter the release tag, such as `1.0.0`.
+
+Verify downloaded assets using GitHub CLI:
+
+```sh
+gh attestation verify main.js --repo travisluong/quick-switch-sidebar
+gh attestation verify manifest.json --repo travisluong/quick-switch-sidebar
+gh attestation verify styles.css --repo travisluong/quick-switch-sidebar
+```

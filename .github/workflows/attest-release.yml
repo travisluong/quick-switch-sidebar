@@ -1,0 +1,57 @@
+name: Attest release assets
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attest (for example 1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check out released source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.event.release.tag_name }}
+          persist-credentials: false
+
+      - name: Download and check release assets
+        shell: bash
+        run: |
+          gh release download "$RELEASE_TAG" --dir release-assets \
+            --pattern main.js --pattern manifest.json --pattern styles.css
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          assert json.loads(Path('manifest.json').read_text(encoding='utf-8-sig'))['version'] == os.environ['RELEASE_TAG'], 'Tag must match manifest version'
+          for name in ('main.js', 'manifest.json', 'styles.css'):
+              # Git checkouts can normalize Windows line endings. Compare text,
+              # but attest the unchanged release bytes downloaded above.
+              source = Path(name).read_text(encoding='utf-8-sig')
+              asset = (Path('release-assets') / name).read_text(encoding='utf-8-sig')
+              assert source == asset, f'Release asset differs from tagged source: {name}'
+          PY
+
+      - name: Attest exact release files
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: |
+            release-assets/main.js
+            release-assets/manifest.json
+            release-assets/styles.css
