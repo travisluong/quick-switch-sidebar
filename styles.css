@@ -1,0 +1,55 @@
+.quick-switch-tree {
+  outline: none;
+  padding: 4px 0;
+}
+
+.quick-switch-row {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  padding-right: 8px;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  color: var(--text-muted);
+  overflow: hidden;
+}
+
+.quick-switch-marker {
+  flex: 0 0 18px;
+  display: flex;
+  align-items: center;
+}
+
+.quick-switch-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.quick-switch-row.is-selected {
+  background: var(--background-modifier-active-hover);
+  color: var(--text-normal);
+}
+
+.quick-switch-tree:focus .quick-switch-row.is-selected {
+  box-shadow: inset 2px 0 var(--interactive-accent);
+}
+
+.quick-switch-marker.is-folder::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.quick-switch-marker.is-expanded::before {
+  transform: rotate(45deg);
+}
+
+.quick-switch-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -1,0 +1,62 @@
+# Quick Switch Sidebar
+
+A small desktop Obsidian plugin. Browse a folder tree with the keyboard or mouse and automatically display the selected Markdown note in the content area. Browsing keeps focus in the sidebar and reuses one content tab.
+
+## Install locally
+
+No build, Node.js, or package installation is required.
+
+1. Find your **vault folder** (the folder containing your notes), not the Obsidian application installation folder.
+2. Inside that vault, create `.obsidian/plugins/quick-switch-sidebar/`. If your vault uses a custom configuration folder, use it instead of `.obsidian`.
+3. Copy these three files from this project into that folder:
+   - `manifest.json`
+   - `main.js`
+   - `styles.css`
+4. Open or restart Obsidian yourself.
+5. Under **Settings → Community plugins**, enable community plugins if necessary, then enable **Quick Switch Sidebar**.
+6. Click the folder-tree ribbon icon, or run **Quick Switch Sidebar: Focus sidebar** from the command palette.
+
+Example installed path:
+
+```text
+YourVault/
+  .obsidian/
+    plugins/
+      quick-switch-sidebar/
+        manifest.json
+        main.js
+        styles.css
+```
+
+To update, replace the three files and restart Obsidian. To uninstall, disable the plugin and delete its `quick-switch-sidebar` folder. Your notes are unaffected.
+
+## Use
+
+| Input | Action |
+| --- | --- |
+| Up / Down | Select a visible item; notes open automatically |
+| Right | Expand a folder or enter its first child |
+| Left | Collapse a folder or select the parent |
+| Home / End | Select the first / last visible item |
+| Enter on a note | Focus the displayed note for editing |
+| Enter or click on a folder | Expand / collapse it |
+| Click on a note | Select and display it |
+
+Assign a shortcut to **Quick Switch Sidebar: Focus sidebar** under **Settings → Hotkeys** to return to browsing quickly.
+
+Folders appear first, then notes, sorted by name. Expanded folders are remembered. Selecting a folder leaves the current note visible. The first note opens a new content tab, which subsequent selections reuse. If you pin or close that tab, browsing creates another one.
+
+## Scope and manual checks
+
+Desktop only; Markdown notes only. This adds a separate sidebar view. It does not replace the built-in File Explorer or provide file management or search. Notes use Obsidian's normal view and saving behavior. Large notes and embeds may take time to render.
+
+Suggested manual checks:
+
+- Expand nested folders, then move between notes with Up / Down: the content should change while keyboard navigation remains in the sidebar.
+- Hold Down briefly: the final displayed note should match the final selected note.
+- Press Enter to edit, then use your sidebar shortcut to return.
+- Rename, create, and delete notes using the normal File Explorer: the tree should refresh.
+- Restart Obsidian: expanded folders should be remembered.
+- Pin or close the browsing tab, then select another note: a new tab should open.
+
+The plugin has not been tested inside Obsidian; installation and interaction testing are manual.
