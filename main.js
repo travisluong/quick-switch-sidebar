@@ -102,6 +102,7 @@ class QuickSwitchView extends ItemView {
     const rootTarget = this.tree.createDiv({ cls: 'quick-switch-root-drop' });
     rootTarget.setAttribute('role', 'presentation');
     this.bindDropTarget(rootTarget, this.app.vault.getRoot());
+    rootTarget.addEventListener('contextmenu', event => this.openRootContextMenu(event));
   }
 
   updateSelection() {
@@ -204,6 +205,45 @@ class QuickSwitchView extends ItemView {
     this.selectedPath = file.path;
     if (!this.closed) this.render();
     await this.plugin.saveData({ expanded: [...this.plugin.expanded] });
+  }
+
+  openRootContextMenu(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.closed) return;
+    this.tree.focus();
+    this.selectedPath = null;
+    this.pendingFile = null;
+    this.updateSelection();
+    const menu = new Menu();
+    for (const [title, icon, extension, content] of [
+      ['New note', 'file-plus', 'md', ''],
+      ['New folder', 'folder-plus', '', ''],
+      ['New canvas', 'layout-dashboard', 'canvas', '{"nodes":[],"edges":[]}'],
+      ['New base', 'database', 'base', 'views:\n  - type: table\n    name: Table\n'],
+    ]) {
+      menu.addItem(item => item.setTitle(title).setIcon(icon).onClick(async () => {
+        if (this.closed) return;
+        try {
+          const name = extension ? 'Untitled' : 'Untitled folder';
+          const suffix = extension ? '.' + extension : '';
+          let path = name + suffix;
+          for (let index = 1; this.app.vault.getAbstractFileByPath(path); index++) {
+            path = name + ' ' + index + suffix;
+          }
+          const file = extension
+            ? await this.app.vault.create(path, content)
+            : await this.app.vault.createFolder(path);
+          if (extension) await this.app.workspace.getLeaf('tab').openFile(file);
+          if (!extension || extension === 'md') this.startRename(file);
+        } catch (error) {
+          console.error('Quick Switch Sidebar:', error);
+          new Notice('Quick Switch could not complete that create action: ' + error.message);
+        }
+      }));
+    }
+    menu.setParentElement(this.tree);
+    menu.showAtMouseEvent(event);
   }
 
   openContextMenu(event, file) {

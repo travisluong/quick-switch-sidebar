@@ -366,6 +366,56 @@ async function check() {
   source.listeners.dragstart(dragEvent());
   await view.onClose();
   assert.equal(view.draggedFile, null);
+
+  // Blank-space creation always targets root, even with another folder selected.
+  view.closed = false;
+  view.selectedPath = other.path;
+  view.pendingFile = file;
+  view.render();
+  view.tree.children.at(-1).listeners.contextmenu(event);
+  const rootMenu = menus.at(-1);
+  assert.deepEqual(rootMenu.items.map(item => item.title),
+    ['New note', 'New folder', 'New canvas', 'New base']);
+  assert.equal(rootMenu.event, event);
+  assert.equal(rootMenu.watchedParent, view.tree);
+  assert.equal(view.selectedPath, null);
+  assert.equal(view.pendingFile, null);
+  const created = [], renamed = [];
+  view.startRename = target => renamed.push(target);
+  view.app.vault.create = async (path, content) => {
+    assert.equal(path.includes('/'), false, 'Create must ignore the selected folder');
+    assert.equal(files.has(path), false, 'Create must never overwrite existing files');
+    const target = new TFile(path);
+    files.set(path, target);
+    created.push({ target, content });
+    return target;
+  };
+  view.app.vault.createFolder = async path => {
+    assert.equal(path.includes('/'), false);
+    assert.equal(files.has(path), false);
+    const target = new TFolder(path);
+    files.set(path, target);
+    created.push({ target });
+    return target;
+  };
+  for (const entry of rootMenu.items) await entry.action();
+  assert.deepEqual(created.map(entry => entry.target.path),
+    ['Untitled.md', 'Untitled folder', 'Untitled.canvas', 'Untitled.base']);
+  assert.deepEqual(renamed, [created[0].target, created[1].target]);
+  assert.deepEqual(actions.filter(action => action[0] === 'tab').slice(-3).map(action => action[1]),
+    [created[0].target, created[2].target, created[3].target]);
+  assert.deepEqual(JSON.parse(created[2].content), { nodes: [], edges: [] });
+  assert.equal(created[3].content, 'views:\n  - type: table\n    name: Table\n');
+  for (const entry of rootMenu.items) await entry.action();
+  assert.deepEqual(created.slice(4).map(entry => entry.target.path),
+    ['Untitled 1.md', 'Untitled folder 1', 'Untitled 1.canvas', 'Untitled 1.base']);
+  view.app.vault.create = async () => { throw Error('denied'); };
+  await rootMenu.items[0].action();
+  assert.match(notices.at(-1), /denied/);
+  const createdCount = created.length;
+  await view.onClose();
+  await rootMenu.items[1].action();
+  assert.equal(created.length, createdCount, 'Closed views must not create items');
   console.log('Context-menu and drag/drop checks passed');
 }
 

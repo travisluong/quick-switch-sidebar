@@ -44,6 +44,7 @@ To update, replace the three files and restart Obsidian. To uninstall, disable t
 | Drag a note or folder onto a folder | Move it into that folder |
 | Drag into the empty area below the tree | Move the item out to the vault root |
 | Right-click a note or folder | Select it and open its context menu without previewing or expanding it |
+| Right-click the empty area below the tree | New note, New folder, New canvas, or New base at the vault root |
 | Shift+F10 or the Menu key | Open the selected item's context menu |
 
 Assign a shortcut to **Quick Switch Sidebar: Focus sidebar** under **Settings → Hotkeys** to return to browsing quickly.
@@ -55,6 +56,8 @@ Drag and drop moves one item at a time within Quick Switch. Valid destinations a
 ## Scope and manual checks
 
 Desktop only; Markdown notes only. This adds a separate sidebar view. It does not replace the built-in File Explorer or provide search. Notes use Obsidian's normal view and saving behavior. Large notes and embeds may take time to render.
+
+The blank-area menu creates items at the vault root with unique untitled names. Notes and folders enter inline rename; canvases and bases open in their normal Obsidian views (enable the Canvas and Bases core plugins). Canvas and base files are not listed in this Markdown-only tree. Creation also works with the built-in Files pane closed. Initial file contents follow the [JSON Canvas format](https://jsoncanvas.org/spec/1.0/) and [Bases syntax](https://obsidian.md/help/bases/syntax).
 
 Context menus reuse the built-in File Explorer's handler when an initialized explorer view is available, including its core and community-plugin actions. The clicked item becomes the explorer's only selection, so an unrelated multiple selection cannot be affected. Rename edits the name directly in Quick Switch: Enter or leaving the input saves, and Escape cancels. Notes keep their `.md` extension, and Obsidian handles link updates. Multiple selection in Quick Switch is not supported.
 
@@ -72,6 +75,7 @@ Suggested manual checks:
 - Try a duplicate name, a folder's own descendant, and cancelling a drag with Escape. No files should change on rejected or cancelled drops, and highlights should clear.
 - Pin or close the browsing tab, then select another note: a new tab should open.
 - Right-click a note and folder, and compare their menus with the built-in File Explorer. Check community-plugin entries and native create, copy, rename, and delete actions on disposable notes.
+- Right-click below the tree and create each of the four item types, including with the Files pane closed. Check root placement, duplicate untitled names, inline rename for notes/folders, and opening canvases/bases.
 - Select several unrelated files in the built-in explorer, then right-click a different note in Quick Switch: only the clicked note should be targeted.
 - Open a menu with Shift+F10 or the Menu key, navigate it with arrows, and dismiss it with Escape. Opening a menu must not preview a note or expand a folder.
 - Close the Files pane and check the fallback menu. Cancel deletion and confirm the note remains.
