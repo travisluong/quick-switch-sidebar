@@ -5,6 +5,7 @@ const vm = require('node:vm');
 
 async function check() {
   const menus = [], notices = [], actions = [];
+  const menuListeners = new Set();
   class TFile { constructor(path) { this.path = path; } }
   class TFolder { constructor(path) { this.path = path; } }
   class Menu {
@@ -19,7 +20,16 @@ async function check() {
       this.items.push(item);
     }
     addSeparator() {}
-    showAtMouseEvent(event) { this.event = event; }
+    setParentElement(el) { this.parentEl = el; return this; }
+    showAtMouseEvent(event) {
+      this.event = event;
+      this.visible = true;
+      this.watchedParent = this.parentEl;
+    }
+    checkVisibility() {
+      // Obsidian checks the parent captured at show time every 500 ms.
+      if (this.watchedParent && !this.watchedParent.isShown()) this.visible = false;
+    }
   }
   const context = {
     require: () => ({ Plugin: class {}, ItemView: class {}, TFile, TFolder, Menu,
@@ -32,7 +42,7 @@ async function check() {
   const file = new TFile('note.md'), folder = new TFolder('folder');
   const files = new Map([[file.path, file], [folder.path, folder]]);
   const event = { preventDefault() {}, stopPropagation() {} };
-  const item = { file, selfEl: {} };
+  const item = { file, selfEl: { isShown: () => false } };
   let selected = [new TFile('unrelated.md')];
   const explorer = {
     fileItems: { [file.path]: item },
@@ -44,11 +54,16 @@ async function check() {
       assert.deepEqual(selected, [item]);
       assert.equal(evt, event);
       assert.equal(el, item.selfEl);
+      const menu = new Menu();
+      view.app.workspace.trigger('file-menu', menu, file, 'file-explorer-context-menu');
+      // Core assigns the hidden explorer row AFTER notifying plugins.
+      menu.setParentElement(item.selfEl);
+      menu.showAtMouseEvent(evt);
       actions.push('native');
     },
   };
   let leaves = [{ view: explorer }];
-  view.tree = { focus() {}, ownerDocument: { defaultView: {
+  view.tree = { focus() {}, isShown: () => true, ownerDocument: { defaultView: {
     MouseEvent: class { constructor(type, options) { Object.assign(this, options); }
       preventDefault() {} stopPropagation() {} },
   } } };
@@ -59,7 +74,16 @@ async function check() {
     workspace: {
       getLeavesOfType: () => leaves,
       getLeaf: (...args) => ({ openFile: async target => actions.push([...args, target]) }),
-      trigger: (...args) => actions.push(args),
+      on(name, callback) {
+        assert.equal(name, 'file-menu');
+        menuListeners.add(callback);
+        return callback;
+      },
+      offref: callback => menuListeners.delete(callback),
+      trigger: (...args) => {
+        actions.push(args);
+        for (const callback of menuListeners) callback(...args.slice(1));
+      },
     },
     fileManager: {
       promptForFileRename: async target => actions.push(['rename', target]),
@@ -70,8 +94,17 @@ async function check() {
   view.openContextMenu(event, file);
   assert.equal(view.selectedPath, file.path);
   assert.equal(view.pendingFile, null);
-  assert.deepEqual(actions, ['native']);
-  assert.equal(menus.length, 0);
+  assert.equal(actions.at(-1), 'native');
+  assert.equal(menuListeners.size, 0);
+  assert.equal(menus.length, 1);
+  menus[0].checkVisibility();
+  assert.equal(menus[0].visible, true, 'Hidden explorer row must not dismiss the menu');
+  assert.equal(menus[0].watchedParent, view.tree);
+  view.tree.isShown = () => false;
+  menus[0].checkVisibility();
+  assert.equal(menus[0].visible, false, 'Hiding Quick Switch should still dismiss its menu');
+  view.tree.isShown = () => true;
+  menus.length = 0;
 
   leaves = [];
   view.openContextMenu(event, file);
@@ -91,6 +124,7 @@ async function check() {
   leaves = [{ view: { ...explorer, openFileContextMenu() { throw Error('changed'); } } }];
   view.openContextMenu(event, file);
   assert.equal(menus.at(-1).items.length, 5);
+  assert.equal(menuListeners.size, 0, 'Native failures must remove the temporary listener');
   view.app.fileManager.promptForDeletion = async () => { throw Error('denied'); };
   await menus.at(-1).items[4].action();
   assert.equal(notices.length, 1);

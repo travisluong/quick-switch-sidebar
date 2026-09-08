@@ -124,6 +124,14 @@ class QuickSwitchView extends ItemView {
           typeof explorer.openFileContextMenu !== 'function' ||
           typeof explorer.tree?.clearSelectedDoms !== 'function' ||
           typeof explorer.tree?.selectItem !== 'function') continue;
+      const menuRef = this.app.workspace.on('file-menu', (menu, target) => {
+        if (target !== file) return;
+        // Core sets its own row as parent after file-menu fires. That row may be
+        // hidden, which closes the menu after 500 ms. Anchor this menu here instead.
+        const setParentElement = menu.setParentElement.bind(menu);
+        menu.setParentElement = () => setParentElement(this.tree);
+        menu.setParentElement(this.tree);
+      });
       try {
         explorer.tree.clearSelectedDoms();
         explorer.tree.selectItem(item);
@@ -132,6 +140,8 @@ class QuickSwitchView extends ItemView {
       } catch (error) {
         console.error('Quick Switch Sidebar: native context menu unavailable', error);
         break;
+      } finally {
+        this.app.workspace.offref(menuRef);
       }
     }
 
