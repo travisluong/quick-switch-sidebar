@@ -1,7 +1,7 @@
 {
   "id": "quick-switch-sidebar",
   "name": "Quick Switch Sidebar",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minAppVersion": "1.5.0",
   "description": "Browse folders and immediately open selected notes without leaving the sidebar.",
   "author": "Travis Luong",
