@@ -45,7 +45,7 @@ class QuickSwitchView extends ItemView {
     this.tree.empty();
     const walk = (folder, depth) => {
       const children = folder.children.filter(file => file instanceof TFolder ||
-        (file instanceof TFile && file.extension === 'md'));
+        (file instanceof TFile && ['md', 'canvas', 'base'].includes(file.extension)));
       children.sort((a, b) => Number(b instanceof TFolder) - Number(a instanceof TFolder) ||
         a.name.localeCompare(b.name, undefined, { numeric: true }));
       for (const file of children) {

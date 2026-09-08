@@ -1,6 +1,6 @@
 # Quick Switch Sidebar
 
-A small desktop Obsidian plugin. Browse a folder tree with the keyboard or mouse and automatically display the selected Markdown note in the content area. Browsing keeps focus in the sidebar and reuses one content tab.
+A small desktop Obsidian plugin. Browse a folder tree with the keyboard or mouse and automatically display the selected Markdown note, canvas, or base in the content area. Browsing keeps focus in the sidebar and reuses one content tab.
 
 ## Install locally
 
@@ -51,15 +51,15 @@ Assign a shortcut to **Quick Switch Sidebar: Focus sidebar** under **Settings â†
 
 Folders appear first, then notes, sorted by name. Expanded folders are remembered. Selecting a folder leaves the current note visible. The first note opens a new content tab, which subsequent selections reuse. If you pin or close that tab, browsing creates another one.
 
-Drag and drop moves one item at a time within Quick Switch. Valid destinations are highlighted, and the destination expands after a move. Moves use Obsidian's link-update preferences and reject duplicate names and moving a folder into itself or its descendants. Folder contents move together, including attachments hidden by this Markdown-only view. Custom sibling ordering, multiple-item drags, external drags, and dragging into other panes are not supported.
+Drag and drop moves one item at a time within Quick Switch. Valid destinations are highlighted, and the destination expands after a move. Moves use Obsidian's link-update preferences and reject duplicate names and moving a folder into itself or its descendants. Folder contents move together, including attachments hidden by this view. Custom sibling ordering, multiple-item drags, external drags, and dragging into other panes are not supported.
 
 ## Scope and manual checks
 
-Desktop only; Markdown notes only. This adds a separate sidebar view. It does not replace the built-in File Explorer or provide search. Notes use Obsidian's normal view and saving behavior. Large notes and embeds may take time to render.
+Desktop only; shows folders, Markdown notes, canvases, and bases. This adds a separate sidebar view. It does not replace the built-in File Explorer or provide search. Files use Obsidian's normal view and saving behavior. Large notes and embeds may take time to render.
 
-The blank-area menu creates items at the vault root with unique untitled names. Notes and folders enter inline rename; canvases and bases open in their normal Obsidian views (enable the Canvas and Bases core plugins). Canvas and base files are not listed in this Markdown-only tree. Creation also works with the built-in Files pane closed. Initial file contents follow the [JSON Canvas format](https://jsoncanvas.org/spec/1.0/) and [Bases syntax](https://obsidian.md/help/bases/syntax).
+The blank-area menu creates items at the vault root with unique untitled names. Notes and folders enter inline rename; canvases and bases open in their normal Obsidian views (enable the Canvas and Bases core plugins). All three file types appear in the tree and support selection, context menus, rename, and drag/drop. Creation also works with the built-in Files pane closed. Initial file contents follow the [JSON Canvas format](https://jsoncanvas.org/spec/1.0/) and [Bases syntax](https://obsidian.md/help/bases/syntax).
 
-Context menus reuse the built-in File Explorer's handler when an initialized explorer view is available, including its core and community-plugin actions. The clicked item becomes the explorer's only selection, so an unrelated multiple selection cannot be affected. Rename edits the name directly in Quick Switch: Enter or leaving the input saves, and Escape cancels. Notes keep their `.md` extension, and Obsidian handles link updates. Multiple selection in Quick Switch is not supported.
+Context menus reuse the built-in File Explorer's handler when an initialized explorer view is available, including its core and community-plugin actions. The clicked item becomes the explorer's only selection, so an unrelated multiple selection cannot be affected. Rename edits the name directly in Quick Switch: Enter or leaving the input saves, and Escape cancels. Files keep their original extension, and Obsidian handles link updates. Multiple selection in Quick Switch is not supported.
 
 This integration uses private Obsidian APIs, which can change between versions. If the explorer or its menu API is unavailable, a native fallback menu offers opening notes in a tab, split, or window, inline rename, deletion through Obsidian's confirmation flow, and `file-menu` contributions. The fallback does not reproduce the complete explorer menu.
 
@@ -75,7 +75,7 @@ Suggested manual checks:
 - Try a duplicate name, a folder's own descendant, and cancelling a drag with Escape. No files should change on rejected or cancelled drops, and highlights should clear.
 - Pin or close the browsing tab, then select another note: a new tab should open.
 - Right-click a note and folder, and compare their menus with the built-in File Explorer. Check community-plugin entries and native create, copy, rename, and delete actions on disposable notes.
-- Right-click below the tree and create each of the four item types, including with the Files pane closed. Check root placement, duplicate untitled names, inline rename for notes/folders, and opening canvases/bases.
+- Right-click below the tree and create each of the four item types, including with the Files pane closed. Check root placement, duplicate untitled names, inline rename for notes/folders, and canvases/bases appearing in the tree and opening when selected.
 - Select several unrelated files in the built-in explorer, then right-click a different note in Quick Switch: only the clicked note should be targeted.
 - Open a menu with Shift+F10 or the Menu key, navigate it with arrows, and dismiss it with Escape. Opening a menu must not preview a note or expand a folder.
 - Close the Files pane and check the fallback menu. Cancel deletion and confirm the note remains.

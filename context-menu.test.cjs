@@ -386,7 +386,11 @@ async function check() {
     assert.equal(path.includes('/'), false, 'Create must ignore the selected folder');
     assert.equal(files.has(path), false, 'Create must never overwrite existing files');
     const target = new TFile(path);
+    Object.assign(target, { name: path, basename: path.slice(0, path.lastIndexOf('.')),
+      extension: path.split('.').at(-1), parent: root });
+    root.children.push(target);
     files.set(path, target);
+    view.render(); // Creation refreshes the same tree used for existing files.
     created.push({ target, content });
     return target;
   };
@@ -406,6 +410,16 @@ async function check() {
     [created[0].target, created[2].target, created[3].target]);
   assert.deepEqual(JSON.parse(created[2].content), { nodes: [], edges: [] });
   assert.equal(created[3].content, 'views:\n  - type: table\n    name: Table\n');
+  const previews = [];
+  view.preview = target => previews.push(target);
+  for (const { target } of [created[0], created[2], created[3]]) {
+    const index = view.rows.findIndex(row => row.file === target);
+    assert.notEqual(index, -1, target.path + ' must appear in the tree');
+    assert.equal(view.rows[index].el.querySelector('.quick-switch-label').text, target.basename);
+    view.select(index);
+    assert.equal(previews.at(-1), target, 'Selecting the row must open that file');
+    assert.equal(view.selectedPath, target.path);
+  }
   for (const entry of rootMenu.items) await entry.action();
   assert.deepEqual(created.slice(4).map(entry => entry.target.path),
     ['Untitled 1.md', 'Untitled folder 1', 'Untitled 1.canvas', 'Untitled 1.base']);
