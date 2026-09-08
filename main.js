@@ -33,9 +33,11 @@ class QuickSwitchView extends ItemView {
   async onClose() {
     this.closed = true;
     this.pendingFile = null;
+    this.cancelRename?.();
   }
 
   render() {
+    this.cancelRename?.();
     const previousIndex = this.rows.findIndex(row => row.file.path === this.selectedPath);
     this.rows = [];
     this.tree.empty();
@@ -133,9 +135,17 @@ class QuickSwitchView extends ItemView {
         menu.setParentElement(this.tree);
       });
       try {
+        if (explorer.fileBeingRenamed === file) explorer.onKeyEscInRename();
         explorer.tree.clearSelectedDoms();
         explorer.tree.selectItem(item);
-        explorer.openFileContextMenu(event, item.selfEl);
+        // Keep core menu actions, but edit names in the visible sidebar. The
+        // receiver also covers startRenameFile calls after creating a folder.
+        const menuExplorer = new Proxy(explorer, {
+          get: (target, key, receiver) => key === 'startRenameFile'
+            ? targetFile => this.startRename(targetFile)
+            : Reflect.get(target, key, receiver),
+        });
+        menuExplorer.openFileContextMenu(event, item.selfEl);
         return;
       } catch (error) {
         console.error('Quick Switch Sidebar: native context menu unavailable', error);
@@ -162,13 +172,77 @@ class QuickSwitchView extends ItemView {
       add('Open in new window', 'picture-in-picture-2', () => this.app.workspace.getLeaf('window').openFile(file));
       menu.addSeparator();
     }
-    if (typeof this.app.fileManager.promptForFileRename === 'function') {
-      add('Rename…', 'pencil', () => this.app.fileManager.promptForFileRename(file));
-    }
+    add('Rename…', 'pencil', () => this.startRename(file));
     add(file instanceof TFolder ? 'Delete folder' : 'Delete file', 'trash-2',
       () => this.app.fileManager.promptForDeletion(file));
     this.app.workspace.trigger('file-menu', menu, file, 'file-explorer-context-menu', this.leaf);
     menu.showAtMouseEvent(event);
+  }
+
+  startRename(file) {
+    if (this.closed || this.app.vault.getAbstractFileByPath(file.path) !== file) return;
+    for (let parent = file.parent; parent?.parent; parent = parent.parent) {
+      this.plugin.expanded.add(parent.path);
+    }
+    this.selectedPath = file.path;
+    this.pendingFile = null;
+    this.render();
+    const row = this.rows.find(row => row.file === file);
+    if (!row) return;
+    const label = row.el.querySelector('.quick-switch-label');
+    label.hide();
+    const input = row.el.createEl('input', {
+      cls: 'quick-switch-rename', attr: { 'aria-label': 'Rename ' + file.name },
+    });
+    input.value = file instanceof TFile ? file.basename : file.name;
+    let finished = false;
+    const finish = focus => {
+      if (finished) return;
+      finished = true;
+      this.cancelRename = null;
+      input.remove();
+      label.show();
+      if (focus && !this.closed) this.tree.focus();
+    };
+    this.cancelRename = () => finish(false);
+    const commit = async focus => {
+      if (finished) return;
+      const name = input.value.trim();
+      finish(focus);
+      if (!name || name.startsWith('.') || /[\\/:*?"<>|]/.test(name)) {
+        new Notice('Enter a valid file or folder name without path separators.');
+        return;
+      }
+      if (this.app.vault.getAbstractFileByPath(file.path) !== file) return;
+      const oldPath = file.path;
+      const parent = file.parent?.path;
+      const newPath = (parent && parent !== '/' ? parent + '/' : '') + name +
+        (file instanceof TFile ? '.' + file.extension : '');
+      if (newPath === oldPath) return;
+      try {
+        await this.app.fileManager.renameFile(file, newPath);
+        this.plugin.expanded = new Set([...this.plugin.expanded].map(path =>
+          path === oldPath || path.startsWith(oldPath + '/') ? newPath + path.slice(oldPath.length) : path));
+        this.selectedPath = file.path;
+        if (!this.closed) this.render();
+        await this.plugin.saveData({ expanded: [...this.plugin.expanded] });
+      } catch (error) {
+        console.error('Quick Switch Sidebar:', error);
+        new Notice('Quick Switch could not rename that item: ' + error.message);
+      }
+    };
+    input.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.isComposing) return;
+      if (event.key === 'Enter') { event.preventDefault(); void commit(true); }
+      if (event.key === 'Escape') { event.preventDefault(); finish(true); }
+    });
+    input.addEventListener('blur', () => void commit(false));
+    for (const event of ['click', 'contextmenu']) {
+      input.addEventListener(event, event => event.stopPropagation());
+    }
+    input.focus();
+    input.select();
   }
 
   onKey(event) {

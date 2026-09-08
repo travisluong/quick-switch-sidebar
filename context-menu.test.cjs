@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const { setImmediate: nextTurn } = require('node:timers/promises');
 
 async function check() {
   const menus = [], notices = [], actions = [];
@@ -46,15 +47,19 @@ async function check() {
   let selected = [new TFile('unrelated.md')];
   const explorer = {
     fileItems: { [file.path]: item },
+    startRenameFile(target) { this.fileBeingRenamed = target; },
+    onKeyEscInRename() { this.fileBeingRenamed = null; },
     tree: {
       clearSelectedDoms() { selected = []; },
       selectItem(value) { selected.push(value); },
     },
     openFileContextMenu(evt, el) {
+      if (this.fileBeingRenamed === file) return;
       assert.deepEqual(selected, [item]);
       assert.equal(evt, event);
       assert.equal(el, item.selfEl);
       const menu = new Menu();
+      menu.addItem(item => item.setTitle('Rename…').onClick(() => this.startRenameFile(file)));
       view.app.workspace.trigger('file-menu', menu, file, 'file-explorer-context-menu');
       // Core assigns the hidden explorer row AFTER notifying plugins.
       menu.setParentElement(item.selfEl);
@@ -104,6 +109,19 @@ async function check() {
   menus[0].checkVisibility();
   assert.equal(menus[0].visible, false, 'Hiding Quick Switch should still dismiss its menu');
   view.tree.isShown = () => true;
+  const startRename = view.startRename;
+  let renameTarget;
+  view.startRename = target => { renameTarget = target; };
+  await menus[0].items[0].action();
+  assert.equal(renameTarget, file, 'Native Rename must edit the sidebar, not the hidden explorer');
+  assert.equal(explorer.fileBeingRenamed, undefined);
+  view.openContextMenu(event, file);
+  assert.equal(menus.length, 2, 'Rename must not block the next context menu');
+  explorer.fileBeingRenamed = file;
+  view.openContextMenu(event, file);
+  assert.equal(explorer.fileBeingRenamed, null, 'Recover a previously stuck native rename');
+  assert.equal(menus.length, 3);
+  view.startRename = startRename;
   menus.length = 0;
 
   leaves = [];
@@ -142,6 +160,92 @@ async function check() {
   await menus.at(-1).items[0].action();
   assert.equal(menus.length, count);
   assert.equal(actions.length, actionCount);
+
+  // Exercise the real inline editor against a small DOM stand-in.
+  class Element {
+    constructor() { this.children = []; this.listeners = {}; this.style = {}; }
+    createDiv(options) { return this.createEl('div', options); }
+    createSpan(options) { return this.createEl('span', options); }
+    createEl(tag, options = {}) {
+      const child = new Element();
+      Object.assign(child, { tag, cls: options.cls, ownerDocument: this.ownerDocument });
+      this.children.push(child);
+      return child;
+    }
+    querySelector(cls) { return this.children.find(child => '.' + child.cls === cls); }
+    addEventListener(type, callback) { this.listeners[type] = callback; }
+    empty() { this.children = []; }
+    setAttribute() {} removeAttribute() {} toggleClass() {} scrollIntoView() {}
+    hide() { this.hidden = true; } show() { this.hidden = false; }
+    remove() { this.removed = true; this.listeners.blur?.(); }
+    focus() { this.ownerDocument.activeElement = this; }
+    select() { this.selected = true; }
+  }
+  const root = new TFolder('/');
+  Object.assign(file, { path: 'note.md', name: 'note.md', basename: 'note', extension: 'md', parent: root });
+  Object.assign(folder, { name: 'folder', parent: root, children: [] });
+  root.children = [file, folder];
+  files.set(file.path, file);
+  view.tree = new Element();
+  view.leaf = {};
+  view.tree.ownerDocument = {};
+  view.plugin = { expanded: new Set(['folder', 'folder/nested']), saveData: async () => {} };
+  view.app.vault.getRoot = () => root;
+  let renameCount = 0;
+  view.app.fileManager.renameFile = async (target, path) => {
+    if (path === 'taken.md') throw Error('File already exists');
+    renameCount++;
+    files.delete(target.path);
+    target.path = path;
+    target.name = path.split('/').at(-1);
+    if (target instanceof TFile) target.basename = target.name.slice(0, -3);
+    files.set(path, target);
+    view.render(); // Vault rename event can arrive before renameFile resolves.
+  };
+  const edit = target => {
+    view.startRename(target);
+    const input = view.rows.find(row => row.file === target).el.querySelector('.quick-switch-rename');
+    assert.equal(view.tree.ownerDocument.activeElement, input);
+    assert.equal(input.selected, true);
+    return input;
+  };
+  const key = async (input, key, extra = {}) => {
+    input.listeners.keydown({ ...event, key, ...extra });
+    await nextTurn();
+  };
+  let input = edit(file);
+  assert.equal(input.value, 'note');
+  input.value = 'renamed';
+  await key(input, 'Enter');
+  assert.equal(file.path, 'renamed.md');
+  assert.equal(view.selectedPath, file.path);
+  assert.equal(view.cancelRename, null);
+  assert.equal(renameCount, 1, 'Removing the editor must not submit a second rename through blur');
+  input = edit(file);
+  input.value = 'cancelled';
+  await key(input, 'Escape');
+  assert.equal(file.path, 'renamed.md');
+  input = edit(file);
+  input.value = '../outside';
+  await key(input, 'Enter');
+  assert.equal(file.path, 'renamed.md');
+  input = edit(file);
+  input.value = 'taken';
+  await key(input, 'Enter');
+  assert.equal(file.path, 'renamed.md');
+  assert.match(notices.at(-1), /already exists/);
+  input = edit(folder);
+  input.value = 'moved';
+  input.listeners.blur();
+  await nextTurn();
+  assert.equal(folder.path, 'moved');
+  assert.equal(view.plugin.expanded.has('moved/nested'), true);
+  input = edit(file);
+  await key(input, 'Enter', { isComposing: true });
+  assert.equal(input.removed, undefined);
+  await view.onClose();
+  assert.equal(input.removed, true);
+  assert.equal(renameCount, 2);
   console.log('Context-menu checks passed');
 }
 

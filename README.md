@@ -52,9 +52,9 @@ Folders appear first, then notes, sorted by name. Expanded folders are remembere
 
 Desktop only; Markdown notes only. This adds a separate sidebar view. It does not replace the built-in File Explorer or provide search. Notes use Obsidian's normal view and saving behavior. Large notes and embeds may take time to render.
 
-Context menus reuse the built-in File Explorer's handler when an initialized explorer view is available, including its core and community-plugin actions. The clicked item becomes the explorer's only selection, so an unrelated multiple selection cannot be affected. Operations such as inline rename use the built-in explorer's UI; keep the Files pane available for these operations. Multiple selection in Quick Switch is not supported.
+Context menus reuse the built-in File Explorer's handler when an initialized explorer view is available, including its core and community-plugin actions. The clicked item becomes the explorer's only selection, so an unrelated multiple selection cannot be affected. Rename edits the name directly in Quick Switch: Enter or leaving the input saves, and Escape cancels. Notes keep their `.md` extension, and Obsidian handles link updates. Multiple selection in Quick Switch is not supported.
 
-This integration uses private Obsidian APIs, which can change between versions. If the explorer or its menu API is unavailable, a native fallback menu offers opening notes in a tab, split, or window, rename when available, deletion through Obsidian's confirmation flow, and `file-menu` contributions. The fallback does not reproduce the complete explorer menu.
+This integration uses private Obsidian APIs, which can change between versions. If the explorer or its menu API is unavailable, a native fallback menu offers opening notes in a tab, split, or window, inline rename, deletion through Obsidian's confirmation flow, and `file-menu` contributions. The fallback does not reproduce the complete explorer menu.
 
 Suggested manual checks:
 
@@ -68,6 +68,7 @@ Suggested manual checks:
 - Select several unrelated files in the built-in explorer, then right-click a different note in Quick Switch: only the clicked note should be targeted.
 - Open a menu with Shift+F10 or the Menu key, navigate it with arrows, and dismiss it with Escape. Opening a menu must not preview a note or expand a folder.
 - Close the Files pane and check the fallback menu. Cancel deletion and confirm the note remains.
+- Rename a note and an expanded folder in Quick Switch with the Files pane hidden. Check Enter, Escape, clicking away, duplicate names, and reopening the context menu afterward.
 
 The isolated context-menu checks run with `node context-menu.test.cjs` (Node.js is only needed for development checks).
 
