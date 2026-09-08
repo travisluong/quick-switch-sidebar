@@ -416,6 +416,8 @@ async function check() {
     const index = view.rows.findIndex(row => row.file === target);
     assert.notEqual(index, -1, target.path + ' must appear in the tree');
     assert.equal(view.rows[index].el.querySelector('.quick-switch-label').text, target.basename);
+    assert.equal(view.rows[index].el.querySelector('.quick-switch-file-type')?.text,
+      target.extension === 'md' ? undefined : target.extension.toUpperCase());
     view.select(index);
     assert.equal(previews.at(-1), target, 'Selecting the row must open that file');
     assert.equal(view.selectedPath, target.path);

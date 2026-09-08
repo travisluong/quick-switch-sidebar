@@ -62,6 +62,9 @@ class QuickSwitchView extends ItemView {
         marker.toggleClass('is-folder', isFolder);
         marker.toggleClass('is-expanded', expanded);
         el.createSpan({ cls: 'quick-switch-label', text: isFolder ? file.name : file.basename });
+        if (file instanceof TFile && ['canvas', 'base'].includes(file.extension)) {
+          el.createSpan({ cls: 'quick-switch-file-type', text: file.extension.toUpperCase() });
+        }
         el.title = file.path;
         const index = this.rows.length;
         el.draggable = true;
