@@ -41,6 +41,8 @@ To update, replace the three files and restart Obsidian. To uninstall, disable t
 | Enter on a note | Focus the displayed note for editing |
 | Enter or click on a folder | Expand / collapse it |
 | Click on a note | Select and display it |
+| Right-click a note or folder | Select it and open its context menu without previewing or expanding it |
+| Shift+F10 or the Menu key | Open the selected item's context menu |
 
 Assign a shortcut to **Quick Switch Sidebar: Focus sidebar** under **Settings → Hotkeys** to return to browsing quickly.
 
@@ -48,7 +50,11 @@ Folders appear first, then notes, sorted by name. Expanded folders are remembere
 
 ## Scope and manual checks
 
-Desktop only; Markdown notes only. This adds a separate sidebar view. It does not replace the built-in File Explorer or provide file management or search. Notes use Obsidian's normal view and saving behavior. Large notes and embeds may take time to render.
+Desktop only; Markdown notes only. This adds a separate sidebar view. It does not replace the built-in File Explorer or provide search. Notes use Obsidian's normal view and saving behavior. Large notes and embeds may take time to render.
+
+Context menus reuse the built-in File Explorer's handler when an initialized explorer view is available, including its core and community-plugin actions. The clicked item becomes the explorer's only selection, so an unrelated multiple selection cannot be affected. Operations such as inline rename use the built-in explorer's UI; keep the Files pane available for these operations. Multiple selection in Quick Switch is not supported.
+
+This integration uses private Obsidian APIs, which can change between versions. If the explorer or its menu API is unavailable, a native fallback menu offers opening notes in a tab, split, or window, rename when available, deletion through Obsidian's confirmation flow, and `file-menu` contributions. The fallback does not reproduce the complete explorer menu.
 
 Suggested manual checks:
 
@@ -58,6 +64,12 @@ Suggested manual checks:
 - Rename, create, and delete notes using the normal File Explorer: the tree should refresh.
 - Restart Obsidian: expanded folders should be remembered.
 - Pin or close the browsing tab, then select another note: a new tab should open.
+- Right-click a note and folder, and compare their menus with the built-in File Explorer. Check community-plugin entries and native create, copy, rename, and delete actions on disposable notes.
+- Select several unrelated files in the built-in explorer, then right-click a different note in Quick Switch: only the clicked note should be targeted.
+- Open a menu with Shift+F10 or the Menu key, navigate it with arrows, and dismiss it with Escape. Opening a menu must not preview a note or expand a folder.
+- Close the Files pane and check the fallback menu. Cancel deletion and confirm the note remains.
+
+The isolated context-menu checks run with `node context-menu.test.cjs` (Node.js is only needed for development checks).
 
 The plugin has not been tested inside Obsidian; installation and interaction testing are manual.
 

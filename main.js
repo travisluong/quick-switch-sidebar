@@ -1,4 +1,4 @@
-﻿const { Plugin, ItemView, TFolder, TFile, Notice } = require('obsidian');
+﻿const { Plugin, ItemView, TFolder, TFile, Notice, Menu } = require('obsidian');
 
 const VIEW_TYPE = 'quick-switch-sidebar';
 
@@ -65,6 +65,7 @@ class QuickSwitchView extends ItemView {
           this.select(index);
           if (isFolder) this.toggle(file);
         });
+        el.addEventListener('contextmenu', event => this.openContextMenu(event, file));
         this.rows.push({ file, el });
         if (isFolder && expanded) walk(file, depth + 1);
       }
@@ -106,7 +107,75 @@ class QuickSwitchView extends ItemView {
     this.render();
   }
 
+  openContextMenu(event, file) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.app.vault.getAbstractFileByPath(file.path) !== file) return;
+    this.tree.focus();
+    this.selectedPath = file.path;
+    this.pendingFile = null;
+    this.updateSelection();
+
+    // ponytail: private explorer API for parity; replace when a public menu builder exists.
+    for (const leaf of this.app.workspace.getLeavesOfType('file-explorer')) {
+      const explorer = leaf.view;
+      const item = explorer.fileItems?.[file.path];
+      if (item?.file !== file || !item.selfEl ||
+          typeof explorer.openFileContextMenu !== 'function' ||
+          typeof explorer.tree?.clearSelectedDoms !== 'function' ||
+          typeof explorer.tree?.selectItem !== 'function') continue;
+      try {
+        explorer.tree.clearSelectedDoms();
+        explorer.tree.selectItem(item);
+        explorer.openFileContextMenu(event, item.selfEl);
+        return;
+      } catch (error) {
+        console.error('Quick Switch Sidebar: native context menu unavailable', error);
+        break;
+      }
+    }
+
+    const menu = new Menu();
+    const add = (title, icon, action) => menu.addItem(item => item
+      .setTitle(title).setIcon(icon).onClick(async () => {
+        try {
+          if (this.app.vault.getAbstractFileByPath(file.path) !== file) return;
+          await action();
+        } catch (error) {
+          console.error('Quick Switch Sidebar:', error);
+          new Notice('Quick Switch could not complete that file action.');
+        }
+      }));
+    if (file instanceof TFile) {
+      add('Open in new tab', 'file-plus', () => this.app.workspace.getLeaf('tab').openFile(file));
+      add('Open to the right', 'separator-vertical', () => this.app.workspace.getLeaf('split', 'vertical').openFile(file));
+      add('Open in new window', 'picture-in-picture-2', () => this.app.workspace.getLeaf('window').openFile(file));
+      menu.addSeparator();
+    }
+    if (typeof this.app.fileManager.promptForFileRename === 'function') {
+      add('Rename…', 'pencil', () => this.app.fileManager.promptForFileRename(file));
+    }
+    add(file instanceof TFolder ? 'Delete folder' : 'Delete file', 'trash-2',
+      () => this.app.fileManager.promptForDeletion(file));
+    this.app.workspace.trigger('file-menu', menu, file, 'file-explorer-context-menu', this.leaf);
+    menu.showAtMouseEvent(event);
+  }
+
   onKey(event) {
+    if (!event.ctrlKey && !event.metaKey && !event.altKey &&
+        (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) {
+      const row = this.rows.find(row => row.file.path === this.selectedPath);
+      if (row) {
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = row.el.getBoundingClientRect();
+        const MouseEvent = this.tree.ownerDocument.defaultView.MouseEvent;
+        this.openContextMenu(new MouseEvent('contextmenu', {
+          clientX: rect.left + 12, clientY: rect.bottom, button: 2,
+        }), row.file);
+      }
+      return;
+    }
     if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter'].includes(event.key)) return;
     event.preventDefault();
