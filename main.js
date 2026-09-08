@@ -33,14 +33,19 @@ class QuickSwitchView extends ItemView {
   async onClose() {
     this.closed = true;
     this.pendingFile = null;
+    this.clearDrag();
     this.cancelRename?.();
   }
 
   render() {
+    this.clearDrag();
     this.cancelRename?.();
     const previousIndex = this.rows.findIndex(row => row.file.path === this.selectedPath);
     this.rows = [];
     this.tree.empty();
+    const rootTarget = this.tree.createDiv({ cls: 'quick-switch-root-drop', text: 'Move to vault root' });
+    rootTarget.setAttribute('role', 'presentation');
+    this.bindDropTarget(rootTarget, this.app.vault.getRoot());
     const walk = (folder, depth) => {
       const children = folder.children.filter(file => file instanceof TFolder ||
         (file instanceof TFile && file.extension === 'md'));
@@ -62,7 +67,26 @@ class QuickSwitchView extends ItemView {
         el.createSpan({ cls: 'quick-switch-label', text: isFolder ? file.name : file.basename });
         el.title = file.path;
         const index = this.rows.length;
+        el.draggable = true;
+        el.addEventListener('pointerdown', () => { this.suppressClick = false; });
+        el.addEventListener('dragstart', event => {
+          if (this.cancelRename || this.moving || this.closed ||
+              this.app.vault.getAbstractFileByPath(file.path) !== file) {
+            event.preventDefault();
+            return;
+          }
+          this.draggedFile = file;
+          this.suppressClick = true;
+          this.selectedPath = file.path;
+          this.pendingFile = null;
+          this.updateSelection();
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('application/x-quick-switch-file', file.path);
+        });
+        el.addEventListener('dragend', () => this.clearDrag());
+        if (isFolder) this.bindDropTarget(el, file);
         el.addEventListener('click', () => {
+          if (this.suppressClick) { this.suppressClick = false; return; }
           this.tree.focus();
           this.select(index);
           if (isFolder) this.toggle(file);
@@ -107,6 +131,79 @@ class QuickSwitchView extends ItemView {
     else this.plugin.expanded.add(folder.path);
     void this.plugin.saveData({ expanded: [...this.plugin.expanded] });
     this.render();
+  }
+
+  clearDrag() {
+    this.draggedFile = null;
+    this.dropTarget?.toggleClass('is-drop-target', false);
+    this.dropTarget = null;
+  }
+
+  canMove(file, folder) {
+    if (this.closed || this.moving || !file || !(folder instanceof TFolder) ||
+        !file.parent || file.parent === folder ||
+        this.app.vault.getAbstractFileByPath(file.path) !== file ||
+        this.app.vault.getAbstractFileByPath(folder.path) !== folder) return false;
+    for (let parent = folder; parent; parent = parent.parent) {
+      if (parent === file) return false;
+    }
+    return true;
+  }
+
+  bindDropTarget(el, folder) {
+    el.addEventListener('dragover', event => {
+      if (!this.canMove(this.draggedFile, folder)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'move';
+      this.dropTarget?.toggleClass('is-drop-target', false);
+      this.dropTarget = el;
+      el.toggleClass('is-drop-target', true);
+    });
+    el.addEventListener('dragleave', event => {
+      if (event.relatedTarget && el.contains(event.relatedTarget)) return;
+      el.toggleClass('is-drop-target', false);
+      if (this.dropTarget === el) this.dropTarget = null;
+    });
+    el.addEventListener('drop', event => {
+      const file = this.draggedFile;
+      if (!file) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.clearDrag();
+      void this.moveFile(file, folder);
+    });
+  }
+
+  async moveFile(file, folder) {
+    if (!this.canMove(file, folder)) return;
+    const newPath = (folder.isRoot() ? '' : folder.path + '/') + file.name;
+    if (this.app.vault.getAbstractFileByPath(newPath)) {
+      new Notice('An item with that name already exists in the destination folder.');
+      return;
+    }
+    this.moving = true;
+    try {
+      await this.renamePath(file, newPath, folder);
+    } catch (error) {
+      console.error('Quick Switch Sidebar:', error);
+      new Notice('Quick Switch could not move that item: ' + error.message);
+    } finally {
+      this.moving = false;
+    }
+  }
+
+  async renamePath(file, newPath, revealFolder) {
+    const oldPath = file.path;
+    await this.app.fileManager.renameFile(file, newPath);
+    this.plugin.expanded = new Set([...this.plugin.expanded].map(path =>
+      path === oldPath || path.startsWith(oldPath + '/') ? newPath + path.slice(oldPath.length) : path));
+    for (let parent = revealFolder; parent?.parent; parent = parent.parent) {
+      this.plugin.expanded.add(parent.path);
+    }
+    this.selectedPath = file.path;
+    if (!this.closed) this.render();
+    await this.plugin.saveData({ expanded: [...this.plugin.expanded] });
   }
 
   openContextMenu(event, file) {
@@ -220,12 +317,7 @@ class QuickSwitchView extends ItemView {
         (file instanceof TFile ? '.' + file.extension : '');
       if (newPath === oldPath) return;
       try {
-        await this.app.fileManager.renameFile(file, newPath);
-        this.plugin.expanded = new Set([...this.plugin.expanded].map(path =>
-          path === oldPath || path.startsWith(oldPath + '/') ? newPath + path.slice(oldPath.length) : path));
-        this.selectedPath = file.path;
-        if (!this.closed) this.render();
-        await this.plugin.saveData({ expanded: [...this.plugin.expanded] });
+        await this.renamePath(file, newPath);
       } catch (error) {
         console.error('Quick Switch Sidebar:', error);
         new Notice('Quick Switch could not rename that item: ' + error.message);

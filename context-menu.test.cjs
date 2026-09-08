@@ -175,7 +175,9 @@ async function check() {
     querySelector(cls) { return this.children.find(child => '.' + child.cls === cls); }
     addEventListener(type, callback) { this.listeners[type] = callback; }
     empty() { this.children = []; }
-    setAttribute() {} removeAttribute() {} toggleClass() {} scrollIntoView() {}
+    setAttribute() {} removeAttribute() {} scrollIntoView() {}
+    toggleClass(name, enabled) { this[name] = enabled; }
+    contains(child) { return this.children.includes(child); }
     hide() { this.hidden = true; } show() { this.hidden = false; }
     remove() { this.removed = true; this.listeners.blur?.(); }
     focus() { this.ownerDocument.activeElement = this; }
@@ -246,7 +248,118 @@ async function check() {
   await view.onClose();
   assert.equal(input.removed, true);
   assert.equal(renameCount, 2);
-  console.log('Context-menu checks passed');
+
+  // Drag/drop uses the same move API as rename, with real tree refreshes.
+  view.closed = false;
+  root.isRoot = () => true;
+  folder.isRoot = () => false;
+  files.set('/', root);
+  const nested = new TFolder('moved/nested');
+  Object.assign(nested, { name: 'nested', parent: folder, children: [], isRoot: () => false });
+  folder.children = [nested];
+  files.set(nested.path, nested);
+  const saved = [];
+  view.plugin.saveData = async data => saved.push(data);
+  view.app.fileManager.renameFile = async (target, path) => {
+    renameCount++;
+    const oldPath = target.path;
+    const parent = files.get(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '/');
+    target.parent.children = target.parent.children.filter(child => child !== target);
+    parent.children.push(target);
+    target.parent = parent;
+    for (const entry of [...files.values()]) {
+      if (entry.path !== oldPath && !entry.path.startsWith(oldPath + '/')) continue;
+      files.delete(entry.path);
+      entry.path = path + entry.path.slice(oldPath.length);
+      files.set(entry.path, entry);
+    }
+    view.render();
+  };
+  view.render();
+  const dragEvent = () => ({ ...event, prevented: false,
+    preventDefault() { this.prevented = true; },
+    dataTransfer: { setData() {} },
+  });
+  const rowFor = target => view.rows.find(row => row.file === target).el;
+  let source = rowFor(file), destination = rowFor(folder), drag = dragEvent();
+  source.listeners.dragstart(drag);
+  assert.equal(view.draggedFile, file);
+  assert.equal(view.selectedPath, file.path);
+  assert.equal(drag.dataTransfer.effectAllowed, 'move');
+  destination.listeners.dragover(drag);
+  assert.equal(drag.prevented, true);
+  assert.equal(destination['is-drop-target'], true);
+  destination.listeners.dragleave({ relatedTarget: destination.children[0] });
+  assert.equal(destination['is-drop-target'], true, 'Crossing a label must retain the highlight');
+  destination.listeners.drop(drag);
+  await nextTurn();
+  assert.equal(file.path, 'moved/renamed.md');
+  assert.equal(file.parent, folder);
+  assert.equal(view.selectedPath, file.path);
+  assert.equal(view.draggedFile, null);
+  assert.equal(destination['is-drop-target'], false);
+  source.listeners.click(); // A trailing click must not preview or toggle.
+  assert.equal(view.plugin.expanded.has(folder.path), true);
+
+  source = rowFor(file);
+  source.listeners.dragstart(dragEvent());
+  view.tree.children[0].listeners.drop(dragEvent());
+  await nextTurn();
+  assert.equal(file.path, 'renamed.md', 'Root drops must not add a leading slash');
+  assert.equal(file.parent, root);
+
+  const beforeInvalid = renameCount;
+  await view.moveFile(folder, folder);
+  await view.moveFile(folder, nested);
+  await view.moveFile(file, root);
+  await view.moveFile(file, file);
+  files.set('moved/renamed.md', new TFile('moved/renamed.md'));
+  await view.moveFile(file, folder);
+  assert.match(notices.at(-1), /already exists/);
+  files.delete('moved/renamed.md');
+  files.delete(file.path);
+  await view.moveFile(file, folder);
+  files.set(file.path, file);
+  files.delete(folder.path);
+  await view.moveFile(file, folder);
+  files.set(folder.path, folder);
+  assert.equal(renameCount, beforeInvalid, 'Invalid drops must not call the move API');
+
+  const other = new TFolder('other');
+  Object.assign(other, { name: 'other', parent: root, children: [], isRoot: () => false });
+  root.children.push(other);
+  files.set(other.path, other);
+  await view.moveFile(folder, other);
+  assert.equal(nested.path, 'other/moved/nested');
+  assert.equal(view.plugin.expanded.has('other/moved/nested'), true);
+  assert.equal(view.plugin.expanded.has('other'), true);
+  assert.equal(saved.at(-1).expanded.includes('other/moved'), true);
+  assert.equal(view.selectedPath, folder.path);
+
+  const move = view.app.fileManager.renameFile;
+  view.app.fileManager.renameFile = async () => { throw Error('denied'); };
+  await view.moveFile(file, other);
+  assert.equal(file.path, 'renamed.md');
+  assert.equal(view.moving, false);
+  assert.match(notices.at(-1), /denied/);
+  view.app.fileManager.renameFile = move;
+  source = rowFor(file);
+  destination = rowFor(other);
+  drag = dragEvent();
+  destination.listeners.dragover(drag);
+  assert.equal(drag.prevented, false, 'External drags are not accepted');
+  view.startRename(file);
+  rowFor(file).listeners.dragstart(drag);
+  assert.equal(drag.prevented, true, 'Inline editing must block dragging');
+  view.cancelRename();
+  source = rowFor(file);
+  source.listeners.dragstart(dragEvent());
+  source.listeners.dragend();
+  assert.equal(view.draggedFile, null);
+  source.listeners.dragstart(dragEvent());
+  await view.onClose();
+  assert.equal(view.draggedFile, null);
+  console.log('Context-menu and drag/drop checks passed');
 }
 
 check().catch(error => { console.error(error); process.exitCode = 1; });

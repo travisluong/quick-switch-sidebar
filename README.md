@@ -41,12 +41,16 @@ To update, replace the three files and restart Obsidian. To uninstall, disable t
 | Enter on a note | Focus the displayed note for editing |
 | Enter or click on a folder | Expand / collapse it |
 | Click on a note | Select and display it |
+| Drag a note or folder onto a folder | Move it into that folder |
+| Drag onto Move to vault root | Move the item out to the vault root |
 | Right-click a note or folder | Select it and open its context menu without previewing or expanding it |
 | Shift+F10 or the Menu key | Open the selected item's context menu |
 
 Assign a shortcut to **Quick Switch Sidebar: Focus sidebar** under **Settings → Hotkeys** to return to browsing quickly.
 
 Folders appear first, then notes, sorted by name. Expanded folders are remembered. Selecting a folder leaves the current note visible. The first note opens a new content tab, which subsequent selections reuse. If you pin or close that tab, browsing creates another one.
+
+Drag and drop moves one item at a time within Quick Switch. Valid destinations are highlighted, and the destination expands after a move. Moves use Obsidian's link-update preferences and reject duplicate names and moving a folder into itself or its descendants. Folder contents move together, including attachments hidden by this Markdown-only view. Custom sibling ordering, multiple-item drags, external drags, and dragging into other panes are not supported.
 
 ## Scope and manual checks
 
@@ -63,6 +67,9 @@ Suggested manual checks:
 - Press Enter to edit, then use your sidebar shortcut to return.
 - Rename, create, and delete notes using the normal File Explorer: the tree should refresh.
 - Restart Obsidian: expanded folders should be remembered.
+- Drag a disposable note into a collapsed folder, then back to **Move to vault root**. Check selection, link updates, and that dragging does not preview the note.
+- Move an expanded folder containing nested notes and attachments. Check its contents and expanded state, including after restarting.
+- Try a duplicate name, a folder's own descendant, and cancelling a drag with Escape. No files should change on rejected or cancelled drops, and highlights should clear.
 - Pin or close the browsing tab, then select another note: a new tab should open.
 - Right-click a note and folder, and compare their menus with the built-in File Explorer. Check community-plugin entries and native create, copy, rename, and delete actions on disposable notes.
 - Select several unrelated files in the built-in explorer, then right-click a different note in Quick Switch: only the clicked note should be targeted.
@@ -70,7 +77,7 @@ Suggested manual checks:
 - Close the Files pane and check the fallback menu. Cancel deletion and confirm the note remains.
 - Rename a note and an expanded folder in Quick Switch with the Files pane hidden. Check Enter, Escape, clicking away, duplicate names, and reopening the context menu afterward.
 
-The isolated context-menu checks run with `node context-menu.test.cjs` (Node.js is only needed for development checks).
+The isolated context-menu, rename, and drag/drop checks run with `node context-menu.test.cjs` (Node.js is only needed for development checks).
 
 The plugin has not been tested inside Obsidian; installation and interaction testing are manual.
 
