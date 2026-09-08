@@ -41,11 +41,12 @@ class QuickSwitchView extends ItemView {
     addButton('Change sort order', 'arrow-up-narrow-wide', event => this.openSortMenu(event));
     this.revealButton = addButton('Auto-reveal current file', 'gallery-vertical', () => {
       this.plugin.autoReveal = !this.plugin.autoReveal;
+      this.collapsedActiveFile = null;
       this.updateRevealButton();
       this.revealActiveFile();
       void this.plugin.saveSettings();
     });
-    addButton('Collapse all', 'chevrons-down-up', () => this.collapseAll());
+    this.collapseButton = addButton('Collapse all', 'chevrons-down-up', () => this.toggleAll());
     this.updateRevealButton();
     const scroll = this.contentEl.createDiv({ cls: 'quick-switch-scroll' });
     this.tree = scroll.createDiv({ cls: 'quick-switch-tree' });
@@ -139,6 +140,13 @@ class QuickSwitchView extends ItemView {
       }
     };
     walk(this.app.vault.getRoot(), 0);
+    if (this.collapseButton) {
+      const collapse = this.hasExpandedFolders();
+      const label = collapse ? 'Collapse all' : 'Expand all';
+      this.collapseButton.setAttribute('aria-label', label);
+      this.collapseButton.setAttribute('title', label);
+      setIcon(this.collapseButton, collapse ? 'chevrons-down-up' : 'chevrons-up-down');
+    }
     if (!this.rows.some(row => row.file.path === this.selectedPath)) {
       this.selectedPath = this.rows[Math.max(0, Math.min(previousIndex, this.rows.length - 1))]?.file.path ?? null;
     }
@@ -202,6 +210,8 @@ class QuickSwitchView extends ItemView {
     if (!this.plugin.autoReveal || this.closed || this.opening || this.pendingFile ||
         this.cancelRename || this.draggedFile || this.moving) return;
     const file = this.app.workspace.getActiveFile();
+    if (file && file === this.collapsedActiveFile) return;
+    this.collapsedActiveFile = null;
     if (!(file instanceof TFile) || !['md', 'canvas', 'base'].includes(file.extension) ||
         this.app.vault.getAbstractFileByPath(file.path) !== file) return;
     const size = this.plugin.expanded.size;
@@ -213,12 +223,30 @@ class QuickSwitchView extends ItemView {
     if (size !== this.plugin.expanded.size) void this.plugin.saveSettings();
   }
 
-  collapseAll() {
-    let file = this.app.vault.getAbstractFileByPath(this.selectedPath || '');
-    while (file?.parent?.parent) file = file.parent;
-    this.selectedPath = file?.path ?? null;
+  hasExpandedFolders() {
+    return this.rows.some(({ file }) => file instanceof TFolder && this.plugin.expanded.has(file.path));
+  }
+
+  toggleAll() {
+    const collapse = this.hasExpandedFolders();
     this.pendingFile = null;
     this.plugin.expanded.clear();
+    if (collapse) {
+      this.collapsedActiveFile = this.app.workspace.getActiveFile();
+      let file = this.app.vault.getAbstractFileByPath(this.selectedPath || '');
+      while (file?.parent?.parent) file = file.parent;
+      this.selectedPath = file?.path ?? null;
+    } else {
+      this.collapsedActiveFile = null;
+      const expand = folder => {
+        for (const child of folder.children) {
+          if (!(child instanceof TFolder)) continue;
+          this.plugin.expanded.add(child.path);
+          expand(child);
+        }
+      };
+      expand(this.app.vault.getRoot());
+    }
     this.render();
     void this.plugin.saveSettings();
   }

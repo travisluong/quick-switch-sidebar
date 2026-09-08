@@ -511,7 +511,35 @@ async function check() {
   assert.equal(view.selectedPath, other.path, 'In-flight previews must not reverse selection');
   view.opening = false;
   workspaceEvents['file-open']();
+  assert.equal(settingsPlugin.expanded.size, 0, 'Repeated active-file events must not undo collapse');
+  assert.equal(view.selectedPath, other.path);
+  assert.equal(buttons[4].attrs['aria-label'], 'Expand all');
+  buttons[4].listeners.click();
+  assert.deepEqual([...settingsPlugin.expanded].sort(), [other.path, folder.path, nested.path].sort(),
+    'Expand all must include folders hidden beneath collapsed parents');
+  assert.equal(view.rows.some(row => row.file === deep), true);
+  assert.equal(view.selectedPath, other.path, 'Expanding must preserve selection');
+  assert.equal(buttons[4].attrs['aria-label'], 'Collapse all');
+  assert.deepEqual([...stored.expanded].sort(), [...settingsPlugin.expanded].sort());
+  buttons[4].listeners.click();
+  assert.equal(settingsPlugin.expanded.size, 0, 'Repeated clicks alternate collapse and expand');
+  assert.equal(stored.expanded.length, 0);
+  settingsPlugin.expanded.add(nested.path);
+  view.render();
+  assert.equal(buttons[4].attrs['aria-label'], 'Expand all', 'Hidden expansion state must not prevent expanding');
+  buttons[4].listeners.click();
+  assert.equal(view.rows.some(row => row.file === deep), true);
+  buttons[4].listeners.click();
+  active = a;
+  workspaceEvents['file-open']();
+  assert.equal(view.selectedPath, a.path, 'Switching files resumes auto-reveal');
+  active = deep;
+  workspaceEvents['file-open']();
   assert.equal(view.selectedPath, deep.path);
+  buttons[4].listeners.click();
+  buttons[3].listeners.click();
+  buttons[3].listeners.click();
+  assert.equal(view.selectedPath, deep.path, 'Explicitly enabling auto-reveal reveals the collapsed file');
   for (const unsupported of [null, { extension: 'png' }]) {
     active = unsupported;
     workspaceEvents['file-open']();

@@ -59,7 +59,7 @@ The toolbar stays above the scrolling tree:
 | New folder | Create and rename a folder inside the selected folder, the selected file's parent, or the vault root if nothing is selected |
 | Change sort order | Sort by name, modified time, or created time, ascending or descending; folders stay first and use alphabetical order for time sorts |
 | Auto-reveal current file | Toggle following the active note, canvas, or base: expand its parents, select it, and scroll it into view without moving editor focus; off by default |
-| Collapse all | Collapse every folder and keep selection on the visible top-level ancestor |
+| Collapse all / Expand all | Collapse every folder and keep selection on the visible top-level ancestor; when all visible folders are collapsed, expand every folder, including nested folders |
 
 Sort and auto-reveal preferences apply to Quick Switch independently of the built-in File Explorer. Modified-time sorting refreshes when files change. Auto-reveal waits out Quick Switch's own preview events so rapid keyboard browsing does not jump backwards.
 
