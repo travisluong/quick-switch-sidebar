@@ -1,3 +1,41 @@
+.quick-switch-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.quick-switch-toolbar {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.quick-switch-toolbar button {
+  padding: 6px;
+  height: auto;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.quick-switch-toolbar button:hover,
+.quick-switch-toolbar button.is-active {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.quick-switch-toolbar button:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+}
+
+.quick-switch-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .quick-switch-tree {
   display: flex;
   flex-direction: column;

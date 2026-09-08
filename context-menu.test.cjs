@@ -15,12 +15,14 @@ async function check() {
       const item = {
         setTitle(title) { this.title = title; return this; },
         setIcon() { return this; },
+        setChecked(value) { this.checked = value; return this; },
         onClick(action) { this.action = action; return this; },
       };
       build(item);
       this.items.push(item);
     }
     addSeparator() {}
+    showAtPosition(position) { this.position = position; }
     setParentElement(el) { this.parentEl = el; return this; }
     showAtMouseEvent(event) {
       this.event = event;
@@ -33,12 +35,12 @@ async function check() {
     }
   }
   const context = {
-    require: () => ({ Plugin: class {}, ItemView: class {}, TFile, TFolder, Menu,
+    require: () => ({ Plugin: class {}, ItemView: class {}, TFile, TFolder, Menu, setIcon() {},
       Notice: class { constructor(message) { notices.push(message); } } }),
     module: {}, console: { error() {} },
   };
   vm.runInNewContext(fs.readFileSync(`${__dirname}/main.js`, 'utf8') +
-    '\nmodule.exports = QuickSwitchView;', context);
+    '\nthis.PluginClass = module.exports; module.exports = QuickSwitchView;', context);
   const view = new context.module.exports({}, {});
   const file = new TFile('note.md'), folder = new TFolder('folder');
   const files = new Map([[file.path, file], [folder.path, folder]]);
@@ -168,14 +170,17 @@ async function check() {
     createSpan(options) { return this.createEl('span', options); }
     createEl(tag, options = {}) {
       const child = new Element();
-      Object.assign(child, { tag, cls: options.cls, text: options.text, ownerDocument: this.ownerDocument });
+      Object.assign(child, { tag, cls: options.cls, text: options.text, attrs: options.attr || {}, ownerDocument: this.ownerDocument });
       this.children.push(child);
       return child;
     }
     querySelector(cls) { return this.children.find(child => '.' + child.cls === cls); }
     addEventListener(type, callback) { this.listeners[type] = callback; }
     empty() { this.children = []; }
-    setAttribute() {} removeAttribute() {} scrollIntoView() {}
+    addClass() {}
+    setAttribute(name, value) { (this.attrs ??= {})[name] = value; }
+    removeAttribute() {} scrollIntoView() {}
+    getBoundingClientRect() { return { left: 10, bottom: 30 }; }
     toggleClass(name, enabled) { this[name] = enabled; }
     contains(child) { return this.children.includes(child); }
     hide() { this.hidden = true; } show() { this.hidden = false; }
@@ -192,6 +197,7 @@ async function check() {
   view.leaf = {};
   view.tree.ownerDocument = {};
   view.plugin = { expanded: new Set(['folder', 'folder/nested']), saveData: async () => {} };
+  view.plugin.saveSettings = context.PluginClass.prototype.saveSettings;
   view.app.vault.getRoot = () => root;
   let renameCount = 0;
   view.app.fileManager.renameFile = async (target, path) => {
@@ -432,7 +438,113 @@ async function check() {
   await view.onClose();
   await rootMenu.items[1].action();
   assert.equal(created.length, createdCount, 'Closed views must not create items');
-  console.log('Context-menu and drag/drop checks passed');
+
+  // Toolbar, persisted settings, and active-file following use the real view lifecycle.
+  const settingsPlugin = new context.PluginClass();
+  let stored = { expanded: ['other'], sortOrder: 'invalid', autoReveal: 'yes' };
+  settingsPlugin.loadData = async () => stored;
+  settingsPlugin.saveData = async data => { stored = data; };
+  settingsPlugin.registerView = settingsPlugin.addRibbonIcon = settingsPlugin.addCommand = () => {};
+  await settingsPlugin.onload();
+  assert.equal(settingsPlugin.sortOrder, 'name-asc');
+  assert.equal(settingsPlugin.autoReveal, false);
+  assert.equal(settingsPlugin.expanded.has('other'), true);
+  view.plugin = settingsPlugin;
+  const sample = (name, parent, mtime, ctime) => {
+    const path = (parent === root ? '' : parent.path + '/') + name;
+    const target = new TFile(path);
+    Object.assign(target, { name, basename: name.slice(0, name.lastIndexOf('.')),
+      extension: name.split('.').at(-1), parent, stat: { mtime, ctime } });
+    files.set(path, target);
+    return target;
+  };
+  const a = sample('a.md', root, 30, 10), b = sample('b.canvas', root, 10, 30);
+  const c = sample('c.base', root, 20, 20), deep = sample('deep.md', nested, 1, 1);
+  root.children = [c, other, a, b];
+  nested.children = [deep];
+  let active = deep;
+  view.app.workspace.getActiveFile = () => active;
+  const vaultEvents = {}, workspaceEvents = {};
+  view.app.vault.on = (name, callback) => { vaultEvents[name] = callback; return callback; };
+  view.app.workspace.on = (name, callback) => { workspaceEvents[name] = callback; return callback; };
+  view.registerEvent = () => {};
+  view.registerDomEvent = (el, name, callback) => el.addEventListener(name, callback);
+  view.closed = false;
+  view.contentEl = new Element();
+  view.contentEl.ownerDocument = { activeElement: 'editor' };
+  delete view.updateSelection;
+  view.preview = () => assert.fail('Toolbar navigation must not open another file');
+  await view.onOpen();
+  const buttons = view.contentEl.children[0].children;
+  assert.deepEqual(buttons.map(button => button.attrs['aria-label']),
+    ['New note', 'New folder', 'Change sort order', 'Auto-reveal current file', 'Collapse all']);
+  assert.equal(buttons.every(button => button.tag === 'button' && button.attrs.type === 'button'), true);
+  assert.equal(buttons[3].attrs['aria-pressed'], 'false');
+  buttons[2].listeners.click({ currentTarget: buttons[2] });
+  const sortMenu = menus.at(-1);
+  assert.equal(sortMenu.items.length, 6);
+  assert.equal(sortMenu.items[0].checked, true);
+  const expected = [[a, b, c], [c, b, a], [a, c, b], [b, c, a], [b, c, a], [a, c, b]];
+  for (let i = 0; i < 6; i++) {
+    await sortMenu.items[i].action();
+    assert.deepEqual(Array.from(view.rows).filter(row => row.file instanceof TFile).map(row => row.file), expected[i]);
+    assert.equal(view.rows[0].file, other, 'Folders must stay above files');
+  }
+  await sortMenu.items[2].action();
+  b.stat.mtime = 40;
+  vaultEvents.modify();
+  assert.equal(view.rows.find(row => row.file instanceof TFile).file, b, 'Modified-time sorting must refresh after edits');
+  b.stat.mtime = a.stat.mtime;
+  vaultEvents.modify();
+  assert.equal(view.rows.find(row => row.file instanceof TFile).file, a, 'Timestamp ties use names');
+  buttons[3].listeners.click();
+  assert.equal(buttons[3].attrs['aria-pressed'], 'true');
+  assert.equal(view.selectedPath, deep.path);
+  assert.equal(view.rows.some(row => row.file === deep), true);
+  assert.equal(view.tree.ownerDocument.activeElement, 'editor', 'Reveal must not steal focus');
+  buttons[4].listeners.click();
+  assert.equal(settingsPlugin.expanded.size, 0);
+  assert.equal(view.selectedPath, other.path, 'Collapse selects the visible ancestor');
+  assert.equal(view.rows.some(row => row.file === deep), false);
+  view.opening = true;
+  workspaceEvents['file-open']();
+  assert.equal(view.selectedPath, other.path, 'In-flight previews must not reverse selection');
+  view.opening = false;
+  workspaceEvents['file-open']();
+  assert.equal(view.selectedPath, deep.path);
+  for (const unsupported of [null, { extension: 'png' }]) {
+    active = unsupported;
+    workspaceEvents['file-open']();
+    assert.equal(view.selectedPath, deep.path);
+  }
+  active = a;
+  buttons[3].listeners.click();
+  workspaceEvents['file-open']();
+  assert.equal(view.selectedPath, deep.path, 'Disabled reveal must leave selection alone');
+  settingsPlugin.autoReveal = true;
+  view.toggle(other);
+  await nextTurn();
+  await settingsPlugin.onload();
+  assert.equal(settingsPlugin.autoReveal, true);
+  assert.equal(settingsPlugin.sortOrder, 'mtime-desc', 'Expansion saves must preserve toolbar settings');
+
+  let newPath;
+  view.app.fileManager.getNewFileParent = path => { assert.equal(path, a.path); return nested; };
+  view.app.vault.create = async path => { newPath = path; return new TFile(path); };
+  view.app.vault.createFolder = async path => { newPath = path; return new TFolder(path); };
+  await buttons[0].listeners.click();
+  assert.equal(newPath, nested.path + '/Untitled.md', 'New note honors the configured destination');
+  view.selectedPath = other.path;
+  await buttons[1].listeners.click();
+  assert.equal(newPath, 'other/Untitled folder');
+  view.selectedPath = deep.path;
+  await buttons[1].listeners.click();
+  assert.equal(newPath, nested.path + '/Untitled folder');
+  view.selectedPath = null;
+  await buttons[1].listeners.click();
+  assert.equal(newPath, 'Untitled folder 2', 'No selection creates a unique root folder');
+  await view.onClose();
+  console.log('Sidebar checks passed');
 }
 
 check().catch(error => { console.error(error); process.exitCode = 1; });

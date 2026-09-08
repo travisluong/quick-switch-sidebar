@@ -1,6 +1,11 @@
-﻿const { Plugin, ItemView, TFolder, TFile, Notice, Menu } = require('obsidian');
+const { Plugin, ItemView, TFolder, TFile, Notice, Menu, setIcon } = require('obsidian');
 
 const VIEW_TYPE = 'quick-switch-sidebar';
+const SORT_OPTIONS = [
+  ['name-asc', 'File name (A to Z)'], ['name-desc', 'File name (Z to A)'],
+  ['mtime-desc', 'Modified time (new to old)'], ['mtime-asc', 'Modified time (old to new)'],
+  ['ctime-desc', 'Created time (new to old)'], ['ctime-asc', 'Created time (old to new)'],
+];
 
 class QuickSwitchView extends ItemView {
   constructor(leaf, plugin) {
@@ -19,7 +24,31 @@ class QuickSwitchView extends ItemView {
   getIcon() { return 'folder-tree'; }
 
   async onOpen() {
-    this.tree = this.contentEl.createDiv({ cls: 'quick-switch-tree' });
+    this.contentEl.addClass('quick-switch-content');
+    const toolbar = this.contentEl.createDiv({ cls: 'quick-switch-toolbar' });
+    const addButton = (label, icon, action) => {
+      const button = toolbar.createEl('button', { cls: 'clickable-icon',
+        attr: { type: 'button', 'aria-label': label, title: label } });
+      setIcon(button, icon);
+      this.registerDomEvent(button, 'click', action);
+      return button;
+    };
+    addButton('New note', 'file-plus', () => this.createItem('md'));
+    addButton('New folder', 'folder-plus', () => {
+      const selected = this.app.vault.getAbstractFileByPath(this.selectedPath || '');
+      return this.createItem('', '', selected instanceof TFolder ? selected : selected?.parent || this.app.vault.getRoot());
+    });
+    addButton('Change sort order', 'arrow-up-narrow-wide', event => this.openSortMenu(event));
+    this.revealButton = addButton('Auto-reveal current file', 'gallery-vertical', () => {
+      this.plugin.autoReveal = !this.plugin.autoReveal;
+      this.updateRevealButton();
+      this.revealActiveFile();
+      void this.plugin.saveSettings();
+    });
+    addButton('Collapse all', 'chevrons-down-up', () => this.collapseAll());
+    this.updateRevealButton();
+    const scroll = this.contentEl.createDiv({ cls: 'quick-switch-scroll' });
+    this.tree = scroll.createDiv({ cls: 'quick-switch-tree' });
     this.tree.tabIndex = 0;
     this.tree.setAttribute('role', 'tree');
     this.tree.setAttribute('aria-label', 'Notes and folders');
@@ -27,7 +56,13 @@ class QuickSwitchView extends ItemView {
     for (const event of ['create', 'delete', 'rename']) {
       this.registerEvent(this.app.vault.on(event, () => this.render()));
     }
+    this.registerEvent(this.app.vault.on('modify', () => {
+      if (this.plugin.sortOrder.startsWith('mtime-') && !this.cancelRename &&
+          !this.draggedFile && !this.moving && !this.opening) this.render();
+    }));
+    this.registerEvent(this.app.workspace.on('file-open', () => this.revealActiveFile()));
     this.render();
+    this.revealActiveFile();
   }
 
   async onClose() {
@@ -46,8 +81,15 @@ class QuickSwitchView extends ItemView {
     const walk = (folder, depth) => {
       const children = folder.children.filter(file => file instanceof TFolder ||
         (file instanceof TFile && ['md', 'canvas', 'base'].includes(file.extension)));
-      children.sort((a, b) => Number(b instanceof TFolder) - Number(a instanceof TFolder) ||
-        a.name.localeCompare(b.name, undefined, { numeric: true }));
+      const [field, direction] = (this.plugin.sortOrder || 'name-asc').split('-');
+      children.sort((a, b) => {
+        const foldersFirst = Number(b instanceof TFolder) - Number(a instanceof TFolder);
+        if (foldersFirst) return foldersFirst;
+        const names = a.name.localeCompare(b.name, undefined, { numeric: true });
+        if (field === 'name') return names * (direction === 'desc' ? -1 : 1);
+        if (a instanceof TFolder) return names;
+        return (a.stat[field] - b.stat[field]) * (direction === 'desc' ? -1 : 1) || names;
+      });
       for (const file of children) {
         const isFolder = file instanceof TFolder;
         const expanded = this.plugin.expanded.has(file.path);
@@ -133,8 +175,52 @@ class QuickSwitchView extends ItemView {
   toggle(folder) {
     if (this.plugin.expanded.has(folder.path)) this.plugin.expanded.delete(folder.path);
     else this.plugin.expanded.add(folder.path);
-    void this.plugin.saveData({ expanded: [...this.plugin.expanded] });
+    void this.plugin.saveSettings();
     this.render();
+  }
+
+  openSortMenu(event) {
+    const menu = new Menu();
+    for (const [value, label] of SORT_OPTIONS) {
+      menu.addItem(item => item.setTitle(label).setChecked(this.plugin.sortOrder === value).onClick(() => {
+        this.plugin.sortOrder = value;
+        this.render();
+        void this.plugin.saveSettings();
+      }));
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom });
+  }
+
+  updateRevealButton() {
+    this.revealButton.setAttribute('aria-pressed', String(this.plugin.autoReveal));
+    this.revealButton.toggleClass('is-active', this.plugin.autoReveal);
+  }
+
+  revealActiveFile() {
+    // Ignore preview's intermediate events while keyboard browsing is in flight.
+    if (!this.plugin.autoReveal || this.closed || this.opening || this.pendingFile ||
+        this.cancelRename || this.draggedFile || this.moving) return;
+    const file = this.app.workspace.getActiveFile();
+    if (!(file instanceof TFile) || !['md', 'canvas', 'base'].includes(file.extension) ||
+        this.app.vault.getAbstractFileByPath(file.path) !== file) return;
+    const size = this.plugin.expanded.size;
+    for (let parent = file.parent; parent?.parent; parent = parent.parent) {
+      this.plugin.expanded.add(parent.path);
+    }
+    this.selectedPath = file.path;
+    this.render();
+    if (size !== this.plugin.expanded.size) void this.plugin.saveSettings();
+  }
+
+  collapseAll() {
+    let file = this.app.vault.getAbstractFileByPath(this.selectedPath || '');
+    while (file?.parent?.parent) file = file.parent;
+    this.selectedPath = file?.path ?? null;
+    this.pendingFile = null;
+    this.plugin.expanded.clear();
+    this.render();
+    void this.plugin.saveSettings();
   }
 
   clearDrag() {
@@ -207,7 +293,32 @@ class QuickSwitchView extends ItemView {
     }
     this.selectedPath = file.path;
     if (!this.closed) this.render();
-    await this.plugin.saveData({ expanded: [...this.plugin.expanded] });
+    await this.plugin.saveSettings();
+  }
+
+  async createItem(extension, content = '', folder) {
+    if (this.closed) return;
+    try {
+      folder ??= this.app.fileManager.getNewFileParent(this.app.workspace.getActiveFile()?.path || '');
+      if (!(folder instanceof TFolder) || this.app.vault.getAbstractFileByPath(folder.path) !== folder) {
+        throw new Error('The destination folder no longer exists.');
+      }
+      const prefix = folder.path === '/' ? '' : folder.path + '/';
+      const name = extension ? 'Untitled' : 'Untitled folder';
+      const suffix = extension ? '.' + extension : '';
+      let path = prefix + name + suffix;
+      for (let index = 1; this.app.vault.getAbstractFileByPath(path); index++) {
+        path = prefix + name + ' ' + index + suffix;
+      }
+      const file = extension
+        ? await this.app.vault.create(path, content)
+        : await this.app.vault.createFolder(path);
+      if (extension) await this.app.workspace.getLeaf('tab').openFile(file);
+      if (!extension || extension === 'md') this.startRename(file);
+    } catch (error) {
+      console.error('Quick Switch Sidebar:', error);
+      new Notice('Quick Switch could not complete that create action: ' + error.message);
+    }
   }
 
   openRootContextMenu(event) {
@@ -225,25 +336,8 @@ class QuickSwitchView extends ItemView {
       ['New canvas', 'layout-dashboard', 'canvas', '{"nodes":[],"edges":[]}'],
       ['New base', 'database', 'base', 'views:\n  - type: table\n    name: Table\n'],
     ]) {
-      menu.addItem(item => item.setTitle(title).setIcon(icon).onClick(async () => {
-        if (this.closed) return;
-        try {
-          const name = extension ? 'Untitled' : 'Untitled folder';
-          const suffix = extension ? '.' + extension : '';
-          let path = name + suffix;
-          for (let index = 1; this.app.vault.getAbstractFileByPath(path); index++) {
-            path = name + ' ' + index + suffix;
-          }
-          const file = extension
-            ? await this.app.vault.create(path, content)
-            : await this.app.vault.createFolder(path);
-          if (extension) await this.app.workspace.getLeaf('tab').openFile(file);
-          if (!extension || extension === 'md') this.startRename(file);
-        } catch (error) {
-          console.error('Quick Switch Sidebar:', error);
-          new Notice('Quick Switch could not complete that create action: ' + error.message);
-        }
-      }));
+      menu.addItem(item => item.setTitle(title).setIcon(icon)
+        .onClick(() => this.createItem(extension, content, this.app.vault.getRoot())));
     }
     menu.setParentElement(this.tree);
     menu.showAtMouseEvent(event);
@@ -458,9 +552,20 @@ module.exports = class QuickSwitchPlugin extends Plugin {
   async onload() {
     const data = await this.loadData();
     this.expanded = new Set(Array.isArray(data?.expanded) ? data.expanded : []);
+    this.sortOrder = SORT_OPTIONS.some(([value]) => value === data?.sortOrder) ? data.sortOrder : 'name-asc';
+    this.autoReveal = data?.autoReveal === true;
     this.registerView(VIEW_TYPE, leaf => new QuickSwitchView(leaf, this));
     this.addRibbonIcon('folder-tree', 'Focus Quick Switch Sidebar', () => this.activate());
     this.addCommand({ id: 'focus-sidebar', name: 'Focus sidebar', callback: () => this.activate() });
+  }
+
+  async saveSettings() {
+    try {
+      await this.saveData({ expanded: [...this.expanded], sortOrder: this.sortOrder, autoReveal: this.autoReveal });
+    } catch (error) {
+      console.error('Quick Switch Sidebar:', error);
+      new Notice('Quick Switch could not save sidebar settings.');
+    }
   }
 
   async activate() {

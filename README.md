@@ -49,7 +49,19 @@ To update, replace the three files and restart Obsidian. To uninstall, disable t
 
 Assign a shortcut to **Quick Switch Sidebar: Focus sidebar** under **Settings → Hotkeys** to return to browsing quickly.
 
-Folders appear first, then notes, sorted by name. Expanded folders are remembered. Selecting a folder leaves the current note visible. The first note opens a new content tab, which subsequent selections reuse. If you pin or close that tab, browsing creates another one.
+Folders appear first, with files sorted by name by default. Expanded folders, sort order, and auto-reveal preference are remembered. Selecting a folder leaves the current file visible. The first file opens a new content tab, which subsequent selections reuse. If you pin or close that tab, browsing creates another one.
+
+The toolbar stays above the scrolling tree:
+
+| Button | Action |
+| --- | --- |
+| New note | Create a note using Obsidian's default-note location setting, then rename it inline |
+| New folder | Create and rename a folder inside the selected folder, the selected file's parent, or the vault root if nothing is selected |
+| Change sort order | Sort by name, modified time, or created time, ascending or descending; folders stay first and use alphabetical order for time sorts |
+| Auto-reveal current file | Toggle following the active note, canvas, or base: expand its parents, select it, and scroll it into view without moving editor focus; off by default |
+| Collapse all | Collapse every folder and keep selection on the visible top-level ancestor |
+
+Sort and auto-reveal preferences apply to Quick Switch independently of the built-in File Explorer. Modified-time sorting refreshes when files change. Auto-reveal waits out Quick Switch's own preview events so rapid keyboard browsing does not jump backwards.
 
 Drag and drop moves one item at a time within Quick Switch. Valid destinations are highlighted, and the destination expands after a move. Moves use Obsidian's link-update preferences and reject duplicate names and moving a folder into itself or its descendants. Folder contents move together, including attachments hidden by this view. Custom sibling ordering, multiple-item drags, external drags, and dragging into other panes are not supported.
 
@@ -70,6 +82,8 @@ Suggested manual checks:
 - Press Enter to edit, then use your sidebar shortcut to return.
 - Rename, create, and delete notes using the normal File Explorer: the tree should refresh.
 - Restart Obsidian: expanded folders should be remembered.
+- Check all five toolbar buttons with mouse and keyboard. Verify new-note location settings, new-folder placement, all six sort choices, timestamp ties, and persistence after restarting.
+- Enable auto-reveal and switch between files in nested folders from other tabs: ancestors should expand without taking editor focus. Check rapid Up/Down browsing, toggle auto-reveal off, and collapse all while it is enabled.
 - Drag a disposable note into a collapsed folder, then into the empty area below the tree to move it back to the vault root. Check both short and scrolling trees, selection, link updates, and that dragging does not preview the note. The root drop area should have no visible box or label.
 - Move an expanded folder containing nested notes and attachments. Check its contents and expanded state, including after restarting.
 - Try a duplicate name, a folder's own descendant, and cancelling a drag with Escape. No files should change on rejected or cancelled drops, and highlights should clear.
@@ -81,7 +95,7 @@ Suggested manual checks:
 - Close the Files pane and check the fallback menu. Cancel deletion and confirm the note remains.
 - Rename a note and an expanded folder in Quick Switch with the Files pane hidden. Check Enter, Escape, clicking away, duplicate names, and reopening the context menu afterward.
 
-The isolated context-menu, rename, and drag/drop checks run with `node context-menu.test.cjs` (Node.js is only needed for development checks).
+The isolated sidebar checks (context menus, rename, drag/drop, toolbar, sorting, auto-reveal, and settings) run with `node context-menu.test.cjs` (Node.js is only needed for development checks).
 
 The plugin has not been tested inside Obsidian; installation and interaction testing are manual.
 
