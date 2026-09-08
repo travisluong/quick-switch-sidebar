@@ -1,23 +1,23 @@
 .quick-switch-tree {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  box-sizing: border-box;
   outline: none;
   padding: 4px 0;
 }
 
 .quick-switch-root-drop {
-  padding: 6px 8px;
-  color: var(--text-muted);
-  font-size: var(--font-ui-small);
-  border: 1px dashed var(--background-modifier-border);
-  border-radius: var(--radius-s);
-  margin: 0 4px 4px;
+  flex: 1 0 32px;
 }
 
-.quick-switch-tree .is-drop-target {
+.quick-switch-row.is-drop-target {
   background: var(--background-modifier-hover);
   box-shadow: inset 0 0 0 2px var(--interactive-accent);
 }
 
 .quick-switch-row {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   min-height: 28px;

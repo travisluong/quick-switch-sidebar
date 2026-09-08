@@ -43,9 +43,6 @@ class QuickSwitchView extends ItemView {
     const previousIndex = this.rows.findIndex(row => row.file.path === this.selectedPath);
     this.rows = [];
     this.tree.empty();
-    const rootTarget = this.tree.createDiv({ cls: 'quick-switch-root-drop', text: 'Move to vault root' });
-    rootTarget.setAttribute('role', 'presentation');
-    this.bindDropTarget(rootTarget, this.app.vault.getRoot());
     const walk = (folder, depth) => {
       const children = folder.children.filter(file => file instanceof TFolder ||
         (file instanceof TFile && file.extension === 'md'));
@@ -102,6 +99,9 @@ class QuickSwitchView extends ItemView {
     }
     this.updateSelection();
     if (!this.rows.length) this.tree.createDiv({ text: 'No notes yet.' });
+    const rootTarget = this.tree.createDiv({ cls: 'quick-switch-root-drop' });
+    rootTarget.setAttribute('role', 'presentation');
+    this.bindDropTarget(rootTarget, this.app.vault.getRoot());
   }
 
   updateSelection() {

@@ -168,7 +168,7 @@ async function check() {
     createSpan(options) { return this.createEl('span', options); }
     createEl(tag, options = {}) {
       const child = new Element();
-      Object.assign(child, { tag, cls: options.cls, ownerDocument: this.ownerDocument });
+      Object.assign(child, { tag, cls: options.cls, text: options.text, ownerDocument: this.ownerDocument });
       this.children.push(child);
       return child;
     }
@@ -303,7 +303,14 @@ async function check() {
 
   source = rowFor(file);
   source.listeners.dragstart(dragEvent());
-  view.tree.children[0].listeners.drop(dragEvent());
+  const rootTarget = view.tree.children.at(-1);
+  assert.equal(rootTarget.cls, 'quick-switch-root-drop', 'Root drop area must follow all rows');
+  assert.equal(rootTarget.text, undefined, 'Root drop area must have no visible label');
+  const rootDrag = dragEvent();
+  rootTarget.listeners.dragover(rootDrag);
+  assert.equal(rootDrag.prevented, true);
+  assert.equal(rootDrag.dataTransfer.dropEffect, 'move');
+  rootTarget.listeners.drop(rootDrag);
   await nextTurn();
   assert.equal(file.path, 'renamed.md', 'Root drops must not add a leading slash');
   assert.equal(file.parent, root);

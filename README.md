@@ -42,7 +42,7 @@ To update, replace the three files and restart Obsidian. To uninstall, disable t
 | Enter or click on a folder | Expand / collapse it |
 | Click on a note | Select and display it |
 | Drag a note or folder onto a folder | Move it into that folder |
-| Drag onto Move to vault root | Move the item out to the vault root |
+| Drag into the empty area below the tree | Move the item out to the vault root |
 | Right-click a note or folder | Select it and open its context menu without previewing or expanding it |
 | Shift+F10 or the Menu key | Open the selected item's context menu |
 
@@ -67,7 +67,7 @@ Suggested manual checks:
 - Press Enter to edit, then use your sidebar shortcut to return.
 - Rename, create, and delete notes using the normal File Explorer: the tree should refresh.
 - Restart Obsidian: expanded folders should be remembered.
-- Drag a disposable note into a collapsed folder, then back to **Move to vault root**. Check selection, link updates, and that dragging does not preview the note.
+- Drag a disposable note into a collapsed folder, then into the empty area below the tree to move it back to the vault root. Check both short and scrolling trees, selection, link updates, and that dragging does not preview the note. The root drop area should have no visible box or label.
 - Move an expanded folder containing nested notes and attachments. Check its contents and expanded state, including after restarting.
 - Try a duplicate name, a folder's own descendant, and cancelling a drag with Escape. No files should change on rejected or cancelled drops, and highlights should clear.
 - Pin or close the browsing tab, then select another note: a new tab should open.
